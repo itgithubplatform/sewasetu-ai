@@ -19,6 +19,8 @@ services:
     environment:
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me-before-deploying}
+      DATABASE_URL: ${DATABASE_URL:-}
+      SMS_GATEWAY_URL: ${SMS_GATEWAY_URL:-http://smsgw:8025}
       # the address at which people reach this portal; stamped into sign-in tokens and
       # discovery documents, so it must be the public one when deployed
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8000}

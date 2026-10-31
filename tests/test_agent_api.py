@@ -21,6 +21,55 @@ def client():
     return portal.app.test_client()
 
 
+def test_get_db_uses_render_database_url(monkeypatch):
+    received = {}
+
+    def fake_connect(dsn, **kwargs):
+        received["dsn"] = dsn
+        received["kwargs"] = kwargs
+        return object()
+
+    monkeypatch.setenv("DATABASE_URL", "postgres://db.example/sewasetu")
+    monkeypatch.setattr(portal.psycopg2, "connect", fake_connect)
+
+    portal.get_db()
+
+    assert received["dsn"] == "postgresql://db.example/sewasetu"
+    assert received["kwargs"] == {"connect_timeout": 5}
+
+
+def test_otp_request_reports_sms_gateway_failure(client, monkeypatch):
+    class Cursor:
+        def execute(self, *_args):
+            pass
+
+        def close(self):
+            pass
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(portal, "get_db", Connection)
+    monkeypatch.setattr(portal, "send_sms", lambda *_args: False)
+    with client.session_transaction() as session:
+        session["captcha_answer"] = 7
+
+    response = client.post(
+        "/apply",
+        data={"mobile": "9000000001", "captcha": "7"},
+    )
+
+    assert response.status_code == 503
+    assert b"could not send an OTP" in response.data
+
+
 def citizen_claims():
     return {
         "sub": "citizen:9000000001",

@@ -50,7 +50,9 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 # WITHDRAWN and REJECTED applications do not block a fresh application.
 ACTIVE_STATUSES = ("PENDING", "APPROVED", "DEEMED_APPROVED")
 
-SMS_GATEWAY_URL = config.get("app", "sms_gateway_url")
+SMS_GATEWAY_URL = os.environ.get(
+    "SMS_GATEWAY_URL", config.get("app", "sms_gateway_url")
+).rstrip("/")
 OTP_VALIDITY_SECONDS = config.getint("app", "otp_validity_seconds")
 UPLOAD_DIR = config.get("app", "upload_dir")
 SCHEME_DEADLINE = datetime.strptime(config.get("pension", "scheme_deadline"),
@@ -73,11 +75,18 @@ except Exception:
 
 
 def get_db():
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url:
+        if database_url.startswith("postgres://"):
+            database_url = "postgresql://" + database_url[len("postgres://"):]
+        return psycopg2.connect(database_url, connect_timeout=5)
+
     return psycopg2.connect(
-        host=config.get("database", "host"),
-        port=config.get("database", "port"),
-        dbname=config.get("database", "name"),
-        user=config.get("database", "user"),
+        host=os.environ.get("DB_HOST", config.get("database", "host")),
+        port=os.environ.get("DB_PORT", config.get("database", "port")),
+        dbname=os.environ.get("DB_NAME", config.get("database", "name")),
+        user=os.environ.get("DB_USER", config.get("database", "user")),
+        connect_timeout=5,
         password=config.get("database", "password"),
     )
 
@@ -96,10 +105,16 @@ def hash_password(p):
 
 def send_sms(mobile, text):
     try:
-        requests.post(SMS_GATEWAY_URL + "/api/send",
-                      json={"to": mobile, "text": text}, timeout=5)
-    except Exception as e:
-        app.logger.error("sms gateway error: %s" % e)
+        response = requests.post(
+            SMS_GATEWAY_URL + "/api/send",
+            json={"to": mobile, "text": text},
+            timeout=5,
+        )
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        app.logger.error("SMS gateway request failed: %s", type(exc).__name__)
+        return False
+    return True
 
 
 def deadline_remaining():
@@ -281,7 +296,11 @@ def apply():
                     (mobile, code, datetime.now()))
         conn.commit()
         cur.close(); conn.close()
-        send_sms(mobile, "Your Sewa Setu OTP is %s. Valid for 5 minutes." % code)
+        if not send_sms(
+            mobile, "Your Sewa Setu OTP is %s. Valid for 5 minutes." % code
+        ):
+            flash("We could not send an OTP right now. Please try again later.")
+            return render_template("apply.html", captcha_q=make_captcha()), 503
         session.permanent = True
         session["apply_mobile"] = mobile
         return redirect(url_for("verify"))

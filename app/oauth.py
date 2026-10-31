@@ -388,9 +388,14 @@ def login():
                                 (mobile, code, datetime.now()))
                     conn.commit()
                     cur.close(); conn.close()
-                    portal.send_sms(mobile, "Your Sewa Setu OTP is %s. Valid for 5 minutes." % code)
-                    _update_request(rid, pending_mobile=mobile)
-                    req["pending_mobile"] = mobile
+                    if portal.send_sms(
+                        mobile,
+                        "Your Sewa Setu OTP is %s. Valid for 5 minutes." % code,
+                    ):
+                        _update_request(rid, pending_mobile=mobile)
+                        req["pending_mobile"] = mobile
+                    else:
+                        flash("We could not send an OTP right now. Please try again later.")
         else:
             if (portal.ADMIN_PASSWORD and request.form.get("username") == portal.ADMIN_USERNAME and
                     request.form.get("password") == portal.ADMIN_PASSWORD):

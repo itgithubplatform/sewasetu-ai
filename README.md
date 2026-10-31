@@ -360,7 +360,33 @@ resource URLs. These canonical URLs are used in OAuth discovery and tokens; a
 mismatch can prevent clients from finding the sign-in page or validating token
 audiences.
 
-Put the portal and MCP endpoints behind HTTPS. Configure strong secrets and
+For a deployment outside Docker Compose (including Render), configure the web
+service with:
+
+- `DATABASE_URL`: the managed PostgreSQL connection string. The application
+  supports Render's `postgres://` URL format and converts it for psycopg2.
+- `SECRET_KEY`: a long, random value used to sign browser sessions.
+- `ADMIN_USERNAME` and `ADMIN_PASSWORD`: administrator credentials.
+- `SMS_GATEWAY_URL`: the base URL of a reachable SMS gateway adapter that
+  accepts `POST /api/send` with JSON fields `to` and `text`, and returns a
+  successful HTTP status when the message is accepted.
+- `PUBLIC_BASE_URL`, `CITIZEN_RESOURCE_URL`, and `OFFICER_RESOURCE_URL`: the
+  public HTTPS portal and MCP resource URLs.
+
+The bundled `smsgw` service is a **local development simulator** on the
+Docker Compose network; `http://smsgw:8025` is not reachable from Render. It
+also displays simulated OTP messages and must not be used as a public OTP
+inbox. Configure a real SMS provider through a compatible adapter for
+production. If the gateway is unavailable, the application now stays on the
+application page and reports that it could not send the OTP instead of
+redirecting the applicant to an unusable verification page.
+
+Create the managed database schema before accepting requests by running
+[`app/schema.sql`](app/schema.sql) against that database. Do not run
+[`seed/seed.sql`](seed/seed.sql) against a production database; it contains
+synthetic/example records and is intended for the local Compose setup.
+
+Put the portal and MCP endpoints behind HTTPS. Configure all required
 deployment-specific environment values before starting the services. For
 example, in an environment where the variables are already set:
 
